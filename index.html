@@ -349,18 +349,22 @@
                 const sumOfNetWeight = parseNum(row['SumOfNet Weight']) || 0;
                 const grade = row['Grade'] ? String(row['Grade']).trim() : '';
 
-                // Apply correct ERP logic for MIS based on raw data
+                // Apply correct ERP logic for MIS based on raw data and Auto-Reconcile messy data
                 if (clearPercent >= 1 || clearPercent >= 100 || (outstanding <= 0 && totalDebt > 0)) {
                     row._status = 'fully_paid';
+                    row._outstanding = 0; // Auto-reconcile: Force outstanding to 0
+                    row._paid = totalDebt; // Auto-reconcile: Paid amount equals total debt
                 } else if (grade === 'Not Delivery' || (outstanding === totalDebt && sumOfNetWeight === 0)) {
                     row._status = 'not_delivered';
+                    row._outstanding = outstanding;
+                    row._paid = Math.max(0, totalDebt - outstanding);
                 } else {
                     row._status = 'paying';
+                    row._outstanding = outstanding;
+                    row._paid = Math.max(0, totalDebt - outstanding);
                 }
 
                 row._totalDebt = totalDebt;
-                row._outstanding = outstanding;
-                row._paid = Math.max(0, totalDebt - outstanding);
                 
                 return row;
             });
@@ -576,9 +580,11 @@
                 // Calculate and update the Clear Percent based on new outstanding
                 farmer['Clear Percent'] = (farmer._totalDebt > 0) ? (farmer._paid / farmer._totalDebt).toFixed(2) : 0;
                 
-                // Re-evaluate their status
+                // Re-evaluate their status and auto-reconcile
                 if (farmer._outstanding <= 0 && farmer._totalDebt > 0) {
                     farmer._status = 'fully_paid';
+                    farmer._outstanding = 0;
+                    farmer['Clear Percent'] = 1;
                 } else if (farmer['Grade'] === 'Not Delivery' || (farmer._outstanding === farmer._totalDebt)) {
                     farmer._status = 'not_delivered';
                 } else {
